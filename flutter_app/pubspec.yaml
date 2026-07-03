@@ -1,0 +1,71 @@
+name: prepmaster
+description: Premium JEE/NEET exam preparation platform
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  connectivity_plus: ^6.0.3
+
+   # Camera for proctoring
+  camera: ^0.10.6
+  
+  # Face detection
+  google_mlkit_face_detection: ^0.10.0
+  
+  # For image processing
+  image: ^4.2.0
+  
+  # For permissions
+  permission_handler: ^11.3.1
+  # Core UI
+  cupertino_icons: ^1.0.6
+
+  # State management
+  flutter_riverpod: ^2.5.1
+
+  # Networking
+  dio: ^5.4.3
+  retrofit: ^4.1.0
+
+  # Charts (rating graph)
+  fl_chart: ^0.68.0
+
+  # Calendar (DPP calendar)
+  table_calendar: ^3.1.2
+
+  # Heatmap (activity heatmap)
+  flutter_heatmap_calendar: ^1.0.5
+
+  # PDF viewing (question papers) - Fixed version
+  syncfusion_flutter_pdfviewer: ^26.1.39
+
+  # Math / LaTeX rendering (question text)
+  flutter_math_fork: ^0.7.1
+
+  # Local storage (My Library offline tests)
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  path_provider: ^2.1.3
+
+  # Secure token storage
+  flutter_secure_storage: ^9.2.2
+
+  
+  # Fonts
+  google_fonts: ^6.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  build_runner: ^2.4.9
+  retrofit_generator: ^8.1.0
+  hive_generator: ^2.0.1
+
+flutter:
+  uses-material-design: true

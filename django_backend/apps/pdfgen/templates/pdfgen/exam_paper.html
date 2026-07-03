@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+    @page {
+        size: A4;
+        margin: 14mm 12mm 16mm 12mm;
+        @top-center { content: element(pageheader); }
+        @bottom-center { content: element(pagefooter); }
+    }
+    body {
+        font-family: 'Noto Serif', 'Georgia', serif;
+        font-size: {{ base_font_size }}pt;
+        font-weight: bold;              /* point #6: everything auto-bolded */
+        color: #000;
+        line-height: 1.35;
+    }
+    #pageheader {
+        position: running(pageheader);
+        text-align: center;
+        border-bottom: 2.5px solid #000;
+        padding-bottom: 4px;
+        margin-bottom: 6px;
+    }
+    #pageheader .main-title { font-size: 16pt; font-weight: 900; letter-spacing: 0.5px; }
+    #pageheader .sub-title { font-size: 10pt; font-weight: 700; margin-top: 2px; }
+
+    #pagefooter {
+        position: running(pagefooter);
+        text-align: center;
+        font-size: 8pt;
+        border-top: 1.5px solid #000;
+        padding-top: 3px;
+    }
+
+    .columns {
+        column-count: {{ column_count }};   /* 1 for JEE Advanced, 2 otherwise */
+        column-gap: 8mm;
+        column-rule: 1px solid #000;
+    }
+
+    .category-block { break-inside: avoid-column; margin-bottom: 5mm; }
+    .category-instructions {
+        font-size: 9pt;
+        font-style: italic;
+        font-weight: 700;
+        border: 1px solid #000;
+        padding: 4px 6px;
+        margin-bottom: 6px;
+        break-inside: avoid;
+    }
+    .category-heading {
+        font-size: 11pt;
+        text-decoration: underline;
+        margin-bottom: 3px;
+    }
+
+    .question { break-inside: avoid-column; margin-bottom: 4mm; }
+    .q-number { font-weight: 900; }
+    .q-body { margin: 2px 0; }
+    .q-body .latex { font-size: {{ latex_font_size }}pt; }  /* point #6: larger LaTeX */
+    .q-image { max-width: 90%; display: block; margin: 3px auto; }
+
+    .options { margin-left: 4mm; margin-top: 2px; }
+    .option-row { display: flex; gap: 4px; margin-bottom: 1.5px; }
+    .option-label { width: 14px; }
+
+    .middle-col-tag {
+        writing-mode: vertical-rl;
+        text-orientation: mixed;
+        position: fixed;
+        left: 50%;
+        top: 40%;
+        font-size: 8pt;
+        color: #333;
+    }
+</style>
+</head>
+<body>
+
+<div id="pageheader">
+    <div class="main-title">{{ header_title }}</div>
+    <div class="sub-title">{{ header_subtitle }}</div>
+</div>
+
+<div id="pagefooter">
+    {{ footer_text }} &middot; Page <span class="page-number"></span>
+</div>
+
+<div class="columns">
+    {% for category in categories %}
+    <div class="category-block">
+        <div class="category-heading">{{ category.name }}</div>
+        {% if category.instructions_text %}
+        <div class="category-instructions">{{ category.instructions_text }}</div>
+        {% endif %}
+
+        {% for q in category.questions %}
+        <div class="question">
+            <div class="q-body">
+                <span class="q-number">{{ q.display_number }}.</span>
+                {{ q.rendered_body|safe }}
+            </div>
+            {% if q.image_url %}
+            <img class="q-image" src="{{ q.image_url }}">
+            {% endif %}
+
+            {% if q.question_type == 'MCQ_SINGLE' or q.question_type == 'MCQ_MULTIPLE' %}
+            <div class="options">
+                {% for opt in q.options %}
+                <div class="option-row">
+                    <span class="option-label">({{ opt.label }})</span>
+                    <span>{{ opt.rendered_text|safe }}</span>
+                </div>
+                {% endfor %}
+            </div>
+            {% elif q.question_type == 'NUMERICAL' %}
+            <div class="options"><em>(Numerical value type — enter answer on OMR/response sheet)</em></div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+</div>
+
+</body>
+</html>
