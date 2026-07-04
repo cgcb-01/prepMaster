@@ -1,4 +1,4 @@
-#!C:\Users\Lenovo\Desktop\All in one\app\prepmaster\django_backend\.venv\Scripts\python.exe
+#!c:\Users\Lenovo\Downloads\prepmaster (1)\.venv\Scripts\python.exe
 
 import sys
 import json

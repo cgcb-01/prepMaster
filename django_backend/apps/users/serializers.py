@@ -41,7 +41,7 @@ class PrivateProfileSerializer(PublicProfileSerializer):
 
     class Meta(PublicProfileSerializer.Meta):
         fields = PublicProfileSerializer.Meta.fields + [
-            'email', 'target_exam', 'is_premium', 'premium_expires_at',
+            'email', 'target_exam', 'is_premium', 'premium_expires_at', 'is_staff',
             'weak_subjects', 'weak_chapters',
         ]
 

@@ -1,74 +1,43 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/app_sidebar.dart';
-import '../../navigation.dart';
 import '../../api/api_client.dart';
+import '../../widgets/async_section.dart';
 
 enum AnnouncementType { contestUpcoming, contestDateChange, resultOut, topperList, general }
 
 class Announcement {
-  final String title;
-  final String body;
+  final String title, body;
   final DateTime postedAt;
   final AnnouncementType type;
   Announcement({required this.title, required this.body, required this.postedAt, required this.type});
-}
 
-/// Home: All announcements of AICs and results, Codeforces-blog style
-/// (point #3): upcoming contests / date changes, then post-exam result +
-/// solution release + topper names.
-class HomeScreen extends StatefulWidget {
-  final bool darkMode;
-  final ValueChanged<bool> onToggleDark;
-  const HomeScreen({super.key, required this.darkMode, required this.onToggleDark});
+  factory Announcement.fromJson(Map<String, dynamic> j) => Announcement(
+        title: j['title'] ?? '',
+        body: j['body'] ?? '',
+        postedAt: DateTime.tryParse(j['created_at'] ?? '') ?? DateTime.now(),
+        type: _typeFrom(j['exam_type']),
+      );
 
-  @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen> {
-  List<Announcement> _announcements = [];
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
+  static AnnouncementType _typeFrom(String? category) {
+    switch (category) {
+      case 'RESULT': return AnnouncementType.resultOut;
+      case 'TOPPER': return AnnouncementType.topperList;
+      case 'DATE_CHANGE': return AnnouncementType.contestDateChange;
+      case 'CONTEST': return AnnouncementType.contestUpcoming;
+      default: return AnnouncementType.general;
+    }
   }
+}
 
-  Future<void> _load() async {
-    // In production: GET /api/content/announcements/
-    // Sample data shown here so the screen renders meaningfully out of the box.
-    await Future.delayed(const Duration(milliseconds: 300));
-    setState(() {
-      _announcements = [
-        Announcement(
-          title: 'PAIC #14 scheduled for 6 July, 09:00 AM',
-          body: 'Physics, Chemistry, Mathematics/Biology — 3 hours, syllabus: Mechanics + Organic I.',
-          postedAt: DateTime.now().subtract(const Duration(hours: 2)),
-          type: AnnouncementType.contestUpcoming,
-        ),
-        Announcement(
-          title: 'BAIC #27 results & solutions released',
-          body: 'Solutions are live in My Library. Leaderboard finalized.',
-          postedAt: DateTime.now().subtract(const Duration(hours: 20)),
-          type: AnnouncementType.resultOut,
-        ),
-        Announcement(
-          title: 'Top rankers — BAIC #27',
-          body: '1. Arjun Sharma  2. Priya Nair  3. Rohan Verma',
-          postedAt: DateTime.now().subtract(const Duration(hours: 19)),
-          type: AnnouncementType.topperList,
-        ),
-        Announcement(
-          title: 'PAIC #13 date changed',
-          body: 'Moved from 30 June to 2 July due to scheduling conflict.',
-          postedAt: DateTime.now().subtract(const Duration(days: 3)),
-          type: AnnouncementType.contestDateChange,
-        ),
-      ];
-      _loading = false;
-    });
+/// Home: real announcements pulled from the backend, Codeforces-blog style
+/// (point #3). No sample fallback — a failed fetch shows Retry, not fake posts.
+class HomeScreen extends StatelessWidget {
+  const HomeScreen({super.key});
+
+  Future<List<Announcement>> _fetch() async {
+    final resp = await ApiClient.dio.get('/api/content/announcements/');
+    final list = (resp.data is Map ? resp.data['results'] : resp.data) as List;
+    return list.map((j) => Announcement.fromJson(j)).toList();
   }
 
   IconData _iconFor(AnnouncementType t) {
@@ -83,49 +52,36 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor = widget.darkMode ? AppColors.darkBorder : AppColors.lightBorder;
-    final secondaryText = widget.darkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final borderColor = isDark ? AppColors.darkBorder : AppColors.lightBorder;
+    final secondaryText = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
 
-    return Scaffold(
-      body: Row(
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AppSidebar(
-            activeLabel: 'Home',
-            onSelect: (label) => navigateToSidebarLabel(context, label, darkMode: widget.darkMode, onToggleDark: widget.onToggleDark),
-            darkMode: widget.darkMode,
-            onToggleDark: widget.onToggleDark,
-            onLogout: () async {
-              await ApiClient.logout();
-            },
-          ),
+          const Text('Home', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+          Text('Announcements, contest updates & results', style: TextStyle(color: secondaryText, fontSize: 13)),
+          const SizedBox(height: 20),
           Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator(color: AppColors.purple))
-                : RefreshIndicator(
-                    onRefresh: _load,
-                    child: ListView(
-                      padding: const EdgeInsets.all(24),
-                      children: [
-                        const Text('Home', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
-                        Text('Announcements, contest updates & results',
-                            style: TextStyle(color: secondaryText, fontSize: 13)),
-                        const SizedBox(height: 20),
-                        ..._announcements.map((a) => Container(
+            child: AsyncSection<List<Announcement>>(
+              fetcher: _fetch,
+              builder: (context, announcements, refresh) => RefreshIndicator(
+                onRefresh: () async => refresh(),
+                child: announcements.isEmpty
+                    ? Center(child: Text('No announcements yet.', style: TextStyle(color: secondaryText)))
+                    : ListView(
+                        children: announcements.map((a) => Container(
                               margin: const EdgeInsets.only(bottom: 14),
                               padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: borderColor),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
+                              decoration: BoxDecoration(border: Border.all(color: borderColor), borderRadius: BorderRadius.circular(12)),
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Container(
                                     padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.purple.withOpacity(0.12),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
+                                    decoration: BoxDecoration(color: AppColors.purple.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
                                     child: Icon(_iconFor(a.type), size: 18, color: AppColors.purple),
                                   ),
                                   const SizedBox(width: 12),
@@ -137,17 +93,16 @@ class _HomeScreenState extends State<HomeScreen> {
                                         const SizedBox(height: 4),
                                         Text(a.body, style: TextStyle(fontSize: 12.5, color: secondaryText)),
                                         const SizedBox(height: 6),
-                                        Text(_timeAgo(a.postedAt),
-                                            style: TextStyle(fontSize: 10.5, color: secondaryText)),
+                                        Text(_timeAgo(a.postedAt), style: TextStyle(fontSize: 10.5, color: secondaryText)),
                                       ],
                                     ),
                                   ),
                                 ],
                               ),
-                            )),
-                      ],
-                    ),
-                  ),
+                            )).toList(),
+                      ),
+              ),
+            ),
           ),
         ],
       ),

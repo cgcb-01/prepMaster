@@ -1,6 +1,29 @@
 from django.db import models
 
 
+class Announcement(models.Model):
+    """Backs the Home screen feed (point #3): contest schedule/date-change
+    posts, result/solution releases, and topper lists. Posted by admins via
+    the /api/news/ or Django admin; the ExamPaper it's about is optional
+    (some announcements, e.g. topper lists, are informational only)."""
+    CATEGORY_CHOICES = [
+        ('CONTEST', 'Upcoming Contest'),
+        ('DATE_CHANGE', 'Contest Date Change'),
+        ('RESULT', 'Result / Solution Released'),
+        ('TOPPER', 'Topper Announcement'),
+        ('GENERAL', 'General'),
+    ]
+    title = models.CharField(max_length=255)
+    body = models.TextField(blank=True)
+    exam_type = models.CharField(max_length=15, choices=CATEGORY_CHOICES, default='GENERAL')
+    related_paper = models.ForeignKey('exams.ExamPaper', null=True, blank=True, on_delete=models.SET_NULL)
+    created_by = models.ForeignKey('users.User', on_delete=models.SET_NULL, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+
 class Subject(models.Model):
     name = models.CharField(max_length=50)  # Physics, Chemistry, Mathematics, Biology
     exam = models.CharField(max_length=4, choices=[('JEE', 'JEE'), ('NEET', 'NEET')])

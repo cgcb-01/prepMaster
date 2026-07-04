@@ -8,7 +8,7 @@ import 'package:dio/dio.dart';
 /// camera, runs on-device face detection, and only uploads a snapshot to
 /// the backend when something is actually wrong (no face / multiple faces).
 /// No continuous video is streamed or stored — this keeps it lightweight
-/// and just checks no outside people... that's all
+/// and matches the "just checks no outside people... that's all" scope.
 class ProctoringService {
   final Dio dio;
   final int sessionId;
@@ -53,10 +53,12 @@ class ProctoringService {
       } else if (faces.length > 1) {
         await _reportFlag('MULTIPLE_FACES', file.path);
       } else {
+        // All good — delete the local temp file, don't upload anything.
         await File(file.path).delete().catchError((_) => file);
       }
     } catch (_) {
-      
+      // Swallow camera/detector errors — proctoring is best-effort and must
+      // never block or crash the actual exam attempt.
     }
   }
 

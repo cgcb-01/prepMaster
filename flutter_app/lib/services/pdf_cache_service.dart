@@ -10,8 +10,8 @@ import '../api/api_client.dart';
 /// Metadata (paper id, title, local file paths, whether it's still
 /// accessible under the user's premium status) lives in the 'library_meta'
 /// Hive box; the actual PDF bytes live as plain files under the app's
-/// documents directory so the syncfusion PDF viewer can open them by path
-/// without re-downloading.
+/// documents directory so the PDF viewer can open them by path without
+/// re-downloading.
 class PdfCacheService {
   static const _metaBox = 'library_meta';
 
@@ -27,72 +27,38 @@ class PdfCacheService {
   }
 
   /// Downloads and caches a paper. Call after the user taps "Save to
-  /// Library" on a paper's detail screen. Respects the same one-paper-per-
-  /// entry contract as apps.library.models.LibraryItem server-side.
- static Future<void> downloadPaper({
-  required int paperId,
-  required String pdfUrl,
-  String? solutionUrl,
-}) async {
-  final dir = await _libraryDir();
-  final questionPath = '${dir.path}/paper_$paperId.pdf';
-  await ApiClient.dio.download(pdfUrl, questionPath);
+  /// Library" on a paper's detail screen.
+  static Future<void> downloadPaper({
+    required int paperId,
+    required String title,
+    required String pdfUrl,
+    String? solutionUrl,
+  }) async {
+    final dir = await _libraryDir();
+    final questionPath = '${dir.path}/paper_$paperId.pdf';
+    await ApiClient.dio.download(pdfUrl, questionPath);
 
-  String? solutionPath;
-  if (solutionUrl != null) {
-    solutionPath = '${dir.path}/paper_${paperId}_solution.pdf';
-    await ApiClient.dio.download(solutionUrl, solutionPath);
-  }
-
-  final box = await Hive.openBox(_metaBox);
-  await box.put(paperId.toString(), {
-    'paper_id': paperId,
-    'question_path': questionPath,
-    'solution_path': solutionPath,
-    'still_accessible': true,
-    'downloaded_at': DateTime.now().toIso8601String(),
-  });
-  await box.close();
-}
-
-static Future<List<Map<String, dynamic>>> listLibraryItems() async {
-  final box = await Hive.openBox(_metaBox);
-  final items = box.values.cast<Map<String, dynamic>>().toList();
-  await box.close();
-  return items;
-}
-
-static Future<String?> getOrDownloadPaper({
-  required int paperId,
-  required String pdfUrl,
-  String? solutionUrl,
-}) async {
- 
-  final box = await Hive.openBox(_metaBox);
-  final existing = box.get(paperId.toString());
-  await box.close();
-  
-  if (existing != null && existing['still_accessible'] == true) {
-    final path = existing['question_path'] as String?;
-    if (path != null) {
-      final file = File(path);
-      if (await file.exists()) {
-        return path;
-      }
+    String? solutionPath;
+    if (solutionUrl != null) {
+      solutionPath = '${dir.path}/paper_${paperId}_solution.pdf';
+      await ApiClient.dio.download(solutionUrl, solutionPath);
     }
+
+    final box = Hive.box(_metaBox);
+    await box.put(paperId.toString(), {
+      'paper_id': paperId,
+      'title': title,
+      'question_path': questionPath,
+      'solution_path': solutionPath,
+      'still_accessible': true,
+      'downloaded_at': DateTime.now().toIso8601String(),
+    });
   }
-  
-  await downloadPaper(
-    paperId: paperId,
-    pdfUrl: pdfUrl,
-    solutionUrl: solutionUrl,
-  );
-  
-  final newBox = await Hive.openBox(_metaBox);
-  final newData = newBox.get(paperId.toString());
-  await newBox.close();
-  return newData?['question_path'] as String?;
-}
+
+  static List<Map> listLibraryItems() {
+    final box = Hive.box(_metaBox);
+    return box.values.cast<Map>().toList();
+  }
 
   /// Called after pulling /api/sync/library/manifest/: flips
   /// `still_accessible` to false and deletes the cached solution PDF for

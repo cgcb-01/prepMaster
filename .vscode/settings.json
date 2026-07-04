@@ -1,3 +1,10 @@
 {
-    "python-envs.defaultEnvManager": "ms-python.python:system"
+    "python.defaultInterpreterPath": "${workspaceFolder}/django_backend/venv/Scripts/python.exe",
+    "python.terminal.activateEnvironment": true,
+    "debugpy.debugJustMyCode": false,
+    "terminal.integrated.env.windows": {
+        "DJANGO_SETTINGS_MODULE": "config.settings_demo",
+        "WEASYPRINT_DLL_DIRECTORIES": "C:\\msys64\\ucrt64\\bin",
+        "PATH": "${env:PATH};C:\\msys64\\ucrt64\\bin"
+    }
 }

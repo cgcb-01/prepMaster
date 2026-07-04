@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Subject, Chapter, Module, Question, QuestionCategory
+from .models import Subject, Chapter, Module, Question, QuestionCategory, Announcement
 
 
 class ModuleSerializer(serializers.ModelSerializer):
@@ -66,3 +66,7 @@ class QuestionCategorySerializer(serializers.ModelSerializer):
             'id', 'name', 'exam', 'question_type', 'marks_correct',
             'marks_incorrect', 'marks_partial', 'instructions_text',
         ]
+class AnnouncementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Announcement
+        fields = ['id', 'title', 'body', 'exam_type', 'related_paper', 'created_at']

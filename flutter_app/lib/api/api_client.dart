@@ -51,6 +51,12 @@ class ApiClient {
     await _storage.write(key: 'refresh_token', value: resp.data['refresh']);
   }
 
+  static Future<void> register(Map<String, dynamic> payload) async {
+    final resp = await dio.post('/api/auth/register/', data: payload);
+    await _storage.write(key: 'access_token', value: resp.data['access']);
+    await _storage.write(key: 'refresh_token', value: resp.data['refresh']);
+  }
+
   static Future<void> logout() async {
     await _storage.delete(key: 'access_token');
     await _storage.delete(key: 'refresh_token');

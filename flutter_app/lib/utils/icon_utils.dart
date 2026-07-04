@@ -188,6 +188,8 @@ class LucideIcons {
   static const IconData clear = Icons.clear;
   static const IconData undo = Icons.undo;
   static const IconData redo = Icons.redo;
+
+  static const IconData shieldCheck = Icons.shield;
   
   // 📌 Miscellaneous
   static const IconData link = Icons.link;

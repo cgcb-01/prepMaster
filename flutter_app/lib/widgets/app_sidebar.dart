@@ -1,42 +1,37 @@
 import 'package:flutter/material.dart';
-import 'package:prepmaster/utils/icon_utils.dart';
+import '../utils/icon_utils.dart';
 import '../theme/app_theme.dart';
 
 class SidebarItem {
   final IconData icon;
   final String label;
-  final List<SidebarItem>? children;
-  const SidebarItem(this.icon, this.label, {this.children});
+  const SidebarItem(this.icon, this.label);
 }
 
-const sidebarItems = [
+// Flat list, one tap = one destination. No nested expand/collapse — that
+// was adding UI complexity and an extra tap for zero benefit; PYQ's
+// exam/subject/chapter filters now live as dropdowns inside the PYQ screen
+// itself instead of as separate sidebar destinations.
+const _baseSidebarItems = [
   SidebarItem(LucideIcons.home, 'Home'),
-  SidebarItem(LucideIcons.megaphone, 'Announcement'),
-  SidebarItem(LucideIcons.fileClock, 'Past Year Questions', children: [
-    SidebarItem(LucideIcons.circle, 'JEE'),
-    SidebarItem(LucideIcons.circle, 'NEET'),
-    SidebarItem(LucideIcons.circle, 'Subject Wise'),
-    SidebarItem(LucideIcons.circle, 'Chapter Wise'),
-  ]),
   SidebarItem(LucideIcons.calendarCheck, 'Daily Practice Sheet'),
   SidebarItem(LucideIcons.bookOpenCheck, 'Chapterwise Preparation'),
-  SidebarItem(
-  LucideIcons.trophy2,
-  'Premium All India Contest (PAIC)'
-  ),
-  SidebarItem(LucideIcons.award, 'Biweekly All India Contest (BAIC)'),
-  SidebarItem(LucideIcons.calendarDays, 'Syllabus Timeline for Mock test'),
-  SidebarItem(LucideIcons.listChecks, 'To-Do'),
+  SidebarItem(LucideIcons.fileClock, 'Past Year Questions'),
+  SidebarItem(LucideIcons.award, 'Premium All India Contest (PAIC)'),
   SidebarItem(LucideIcons.trophy, 'Leaderboard'),
+  SidebarItem(LucideIcons.listChecks, 'To-Do'),
   SidebarItem(LucideIcons.library, 'My Library'),
   SidebarItem(LucideIcons.layoutDashboard, 'My Dashboard'),
 ];
 
-/// Desktop/tablet fixed sidebar. On mobile, wrap this in a Drawer instead.
-class AppSidebar extends StatefulWidget {
+/// Fixed left sidebar. Stateless and cheap to build — all real work
+/// (data fetching) lives in the tab bodies, kept alive by AppShell's
+/// IndexedStack, not here.
+class AppSidebar extends StatelessWidget {
   final String activeLabel;
   final ValueChanged<String> onSelect;
   final bool darkMode;
+  final bool showAdmin;
   final ValueChanged<bool> onToggleDark;
   final VoidCallback onLogout;
 
@@ -47,23 +42,17 @@ class AppSidebar extends StatefulWidget {
     required this.darkMode,
     required this.onToggleDark,
     required this.onLogout,
+    this.showAdmin = false,
   });
 
   @override
-  State<AppSidebar> createState() => _AppSidebarState();
-}
-
-class _AppSidebarState extends State<AppSidebar> {
-  final Set<String> _expanded = {};
-
-  @override
   Widget build(BuildContext context) {
-    final isDark = widget.darkMode;
-    final borderColor = isDark ? AppColors.darkBorder : AppColors.lightBorder;
-    final secondaryText = isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
+    final borderColor = darkMode ? AppColors.darkBorder : AppColors.lightBorder;
+    final secondaryText = darkMode ? AppColors.darkTextSecondary : AppColors.lightTextSecondary;
+    final items = [..._baseSidebarItems, if (showAdmin) const SidebarItem(LucideIcons.shieldCheck, 'Admin')];
 
     return Container(
-      width: 260,
+      width: 250,
       decoration: BoxDecoration(border: Border(right: BorderSide(color: borderColor))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,8 +62,7 @@ class _AppSidebarState extends State<AppSidebar> {
             child: Row(
               children: [
                 Container(
-                  width: 32,
-                  height: 32,
+                  width: 32, height: 32,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(8),
                     gradient: const LinearGradient(colors: [AppColors.purple, AppColors.purpleGlow]),
@@ -95,7 +83,7 @@ class _AppSidebarState extends State<AppSidebar> {
           Expanded(
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 10),
-              children: sidebarItems.map((item) => _buildItem(item, secondaryText)).toList(),
+              children: items.map((item) => _item(item, secondaryText)).toList(),
             ),
           ),
           Divider(color: borderColor, height: 1),
@@ -103,12 +91,12 @@ class _AppSidebarState extends State<AppSidebar> {
             leading: const Icon(LucideIcons.logOut, color: Colors.redAccent, size: 18),
             title: const Text('Logout', style: TextStyle(color: Colors.redAccent, fontSize: 13.5)),
             dense: true,
-            onTap: widget.onLogout,
+            onTap: onLogout,
           ),
           SwitchListTile(
             dense: true,
-            value: widget.darkMode,
-            onChanged: widget.onToggleDark,
+            value: darkMode,
+            onChanged: onToggleDark,
             activeColor: AppColors.purple,
             title: const Text('Dark mode', style: TextStyle(fontSize: 13.5)),
             secondary: const Icon(LucideIcons.moon, size: 18),
@@ -119,61 +107,40 @@ class _AppSidebarState extends State<AppSidebar> {
     );
   }
 
-  Widget _buildItem(SidebarItem item, Color secondaryText) {
-    final isActive = widget.activeLabel == item.label;
-    final hasChildren = item.children != null;
-    final isExpanded = _expanded.contains(item.label);
-
-    return Column(
-      children: [
-        Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          child: InkWell(
+  Widget _item(SidebarItem item, Color secondaryText) {
+    final isActive = activeLabel == item.label;
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => onSelect(item.label),
+        child: Container(
+          margin: const EdgeInsets.symmetric(vertical: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          decoration: BoxDecoration(
+            color: isActive ? AppColors.purple.withOpacity(0.12) : null,
             borderRadius: BorderRadius.circular(8),
-            onTap: () {
-              if (hasChildren) {
-                setState(() => isExpanded ? _expanded.remove(item.label) : _expanded.add(item.label));
-              } else {
-                widget.onSelect(item.label);
-              }
-            },
-            child: Container(
-              margin: const EdgeInsets.symmetric(vertical: 2),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-              decoration: BoxDecoration(
-                color: isActive ? AppColors.purple.withOpacity(0.12) : null,
-                borderRadius: BorderRadius.circular(8),
-                border: isActive ? const Border(left: BorderSide(color: AppColors.purple, width: 2.5)) : null,
-              ),
-              child: Row(
-                children: [
-                  Icon(item.icon, size: 17, color: isActive ? AppColors.purple : secondaryText),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      item.label,
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        color: isActive ? AppColors.purple : null,
-                        fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-                      ),
-                    ),
+            border: isActive ? const Border(left: BorderSide(color: AppColors.purple, width: 2.5)) : null,
+          ),
+          child: Row(
+            children: [
+              Icon(item.icon, size: 17, color: isActive ? AppColors.purple : secondaryText),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  item.label,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    color: isActive ? AppColors.purple : null,
+                    fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
                   ),
-                  if (hasChildren) Icon(isExpanded ? LucideIcons.chevronUp : LucideIcons.chevronDown, size: 14),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
         ),
-        if (hasChildren && isExpanded)
-          Padding(
-            padding: const EdgeInsets.only(left: 24),
-            child: Column(
-              children: item.children!.map((c) => _buildItem(SidebarItem(c.icon, c.label), secondaryText)).toList(),
-            ),
-          ),
-      ],
+      ),
     );
   }
 }

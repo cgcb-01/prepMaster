@@ -1,6 +1,6 @@
 {
-    "name": "flutter_app",
-    "short_name": "flutter_app",
+    "name": "prepmaster",
+    "short_name": "prepmaster",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

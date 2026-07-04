@@ -23,6 +23,7 @@ class UserProfile {
   final List<String>? weakSubjects;
   final List<String>? weakChapters;
   final bool? isPremium;
+  final bool isStaff;
 
   UserProfile({
     required this.id,
@@ -47,6 +48,7 @@ class UserProfile {
     this.weakSubjects,
     this.weakChapters,
     this.isPremium,
+    this.isStaff = false,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> j) => UserProfile(
@@ -72,5 +74,6 @@ class UserProfile {
         weakSubjects: (j['weak_subjects'] as List?)?.map((e) => e.toString()).toList(),
         weakChapters: (j['weak_chapters'] as List?)?.map((e) => e.toString()).toList(),
         isPremium: j['is_premium'],
+        isStaff: j['is_staff'] ?? false,
       );
 }
