@@ -7,7 +7,7 @@ front-end for the same underlying models — staff can use whichever is handy.
 from rest_framework.routers import DefaultRouter
 from apps.content.admin_api import (
     AdminQuestionViewSet, QuestionCategoryViewSet, SubjectAdminViewSet,
-    ChapterAdminViewSet, ModuleAdminViewSet,
+    ChapterAdminViewSet, ModuleAdminViewSet, AdminImageUploadView,
 )
 from apps.exams.admin_api import AdminExamPaperViewSet
 
@@ -18,5 +18,6 @@ router.register('subjects', SubjectAdminViewSet, basename='admin-subject')
 router.register('chapters', ChapterAdminViewSet, basename='admin-chapter')
 router.register('modules', ModuleAdminViewSet, basename='admin-module')
 router.register('papers', AdminExamPaperViewSet, basename='admin-paper')
+router.register('upload-image', AdminImageUploadView, basename='admin-upload-image')
 
 urlpatterns = router.urls

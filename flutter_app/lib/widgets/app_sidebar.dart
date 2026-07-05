@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../utils/icon_utils.dart';
+import 'package:prepmaster/utils/icons.dart';
 import '../theme/app_theme.dart';
 
 class SidebarItem {

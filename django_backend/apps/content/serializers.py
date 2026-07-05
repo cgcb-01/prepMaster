@@ -5,7 +5,7 @@ from .models import Subject, Chapter, Module, Question, QuestionCategory, Announ
 class ModuleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Module
-        fields = ['id', 'module_type', 'title', 'order', 'is_premium']
+        fields = ['id', 'module_type', 'title', 'order', 'is_premium', 'linked_paper']
 
 
 class ChapterListSerializer(serializers.ModelSerializer):
@@ -66,6 +66,8 @@ class QuestionCategorySerializer(serializers.ModelSerializer):
             'id', 'name', 'exam', 'question_type', 'marks_correct',
             'marks_incorrect', 'marks_partial', 'instructions_text',
         ]
+
+
 class AnnouncementSerializer(serializers.ModelSerializer):
     class Meta:
         model = Announcement

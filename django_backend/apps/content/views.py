@@ -44,26 +44,6 @@ class ChapterDetailView(generics.RetrieveAPIView):
     queryset = Chapter.objects.prefetch_related('modules')
     serializer_class = ChapterDetailSerializer
     permission_classes = [permissions.IsAuthenticated]
-class AnnouncementListView(generics.ListAPIView):
-    """GET /api/content/announcements/ — Home feed (point #3)."""
-    from .serializers import AnnouncementSerializer
-    from .models import Announcement
-    serializer_class = AnnouncementSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    queryset = Announcement.objects.all()
-
-
-class AnnouncementCreateView(generics.CreateAPIView):
-    """POST /api/content/announcements/ — admin posts an announcement
-    (used by the News tab in the reference admin.js pattern)."""
-    from .serializers import AnnouncementSerializer
-    from .models import Announcement
-    serializer_class = AnnouncementSerializer
-    permission_classes = [permissions.IsAdminUser]
-    queryset = Announcement.objects.all()
-
-    def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
 
 
 class SyllabusView(views.APIView):
@@ -87,3 +67,25 @@ class SyllabusView(views.APIView):
         for ch in chapters:
             data.setdefault(ch.subject.name, []).append(ch.name)
         return Response(data)
+
+
+class AnnouncementListView(generics.ListAPIView):
+    """GET /api/content/announcements/ — Home feed (point #3)."""
+    from .serializers import AnnouncementSerializer
+    from .models import Announcement
+    serializer_class = AnnouncementSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    queryset = Announcement.objects.all()
+
+
+class AnnouncementCreateView(generics.CreateAPIView):
+    """POST /api/content/announcements/ — admin posts an announcement
+    (used by the News tab in the reference admin.js pattern)."""
+    from .serializers import AnnouncementSerializer
+    from .models import Announcement
+    serializer_class = AnnouncementSerializer
+    permission_classes = [permissions.IsAdminUser]
+    queryset = Announcement.objects.all()
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)

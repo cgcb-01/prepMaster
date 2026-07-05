@@ -19,6 +19,7 @@ Key guarantees implemented here per the spec:
 from rest_framework import serializers, viewsets, permissions, parsers, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.core.files.storage import default_storage
 
 from .models import Question, QuestionCategory, Subject, Chapter, Module
 
@@ -26,6 +27,30 @@ from .models import Question, QuestionCategory, Subject, Chapter, Module
 class IsAdminUser(permissions.BasePermission):
     def has_permission(self, request, view):
         return bool(request.user and request.user.is_staff)
+
+
+class AdminImageUploadView(viewsets.ViewSet):
+    """
+    POST /api/admin/upload-image/  multipart: file=<image>
+    Saves the file to the real backend storage (Backblaze B2 in production,
+    local MEDIA in demo mode) and returns its permanent path + URL. This is
+    the only way an image ever gets attached to a question — the client
+    never sends a blob: URL or a local device path to the server; it always
+    uploads bytes here first and then references the returned `path`.
+    """
+    permission_classes = [IsAdminUser]
+    parser_classes = [parsers.MultiPartParser]
+
+    def create(self, request):
+        file_obj = request.FILES.get('file')
+        if not file_obj:
+            return Response({'detail': 'No file provided.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        saved_path = default_storage.save(f'admin_uploads/{file_obj.name}', file_obj)
+        return Response({
+            'path': saved_path,
+            'url': default_storage.url(saved_path),
+        }, status=status.HTTP_201_CREATED)
 
 
 class QuestionOptionField(serializers.Serializer):
@@ -37,25 +62,59 @@ class QuestionOptionField(serializers.Serializer):
     is_correct = serializers.BooleanField(default=False)
 
 
+class SubjectField(serializers.PrimaryKeyRelatedField):
+    """
+    Accepts either a real Subject id (int) or a plain name string like
+    "PHYSICS"/"Physics". The quick-add question form sends a simple subject
+    name (matching the reference admin.js UX) rather than making the admin
+    look up an id first — this resolves that name to an existing Subject or
+    creates one on the fly, so the request never 400s on a type mismatch.
+    """
+    def to_internal_value(self, data):
+        if isinstance(data, str) and not data.isdigit():
+            subject = Subject.objects.filter(name__iexact=data).first()
+            if not subject:
+                subject = Subject.objects.create(name=data.title(), exam='JEE')
+            return subject
+        return super().to_internal_value(data)
+
+
 class AdminQuestionSerializer(serializers.ModelSerializer):
     """
     Full read/write serializer used by the admin authoring UI.
-    `options` accepts a raw JSON list (validated against QuestionOptionField
-    shape) rather than nested multipart fields, so a single PATCH can
-    reorder/edit/add/remove options in one call — important for "every
-    question can be edited" (point #19) to feel instant rather than
-    requiring N sub-requests.
+
+    Images are never sent as raw multipart files or blob: URLs in this
+    payload. The client first uploads bytes to AdminImageUploadView, gets
+    back a real storage path, and passes that path here via `image_path` /
+    `solution_image_path` (write-only). We assign it straight to the
+    ImageField's `.name` — the file is already persisted in storage, so
+    this just points the question at it, no re-upload.
+
+    Per-option images work the same way but don't need a dedicated model
+    field: `options` is plain JSON, so the uploaded path/URL is just
+    embedded as `image_url` in each option dict directly by the client.
     """
     options = serializers.ListField(child=QuestionOptionField(), required=False, default=list)
+    subject = SubjectField(queryset=Subject.objects.all())
+    image_path = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    solution_image_path = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    image = serializers.SerializerMethodField(read_only=True)
+    solution_image = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Question
         fields = [
-            'id', 'subject', 'chapter', 'category', 'body', 'image',
-            'options', 'numerical_answer', 'solution_text', 'solution_image',
+            'id', 'subject', 'chapter', 'category', 'body', 'image', 'image_path',
+            'options', 'numerical_answer', 'solution_text', 'solution_image', 'solution_image_path',
             'year', 'exam_shift', 'created_by', 'created_at', 'updated_at',
         ]
         read_only_fields = ['created_by', 'created_at', 'updated_at']
+
+    def get_image(self, obj):
+        return obj.image.url if obj.image else None
+
+    def get_solution_image(self, obj):
+        return obj.solution_image.url if obj.solution_image else None
 
     def validate_options(self, value):
         category_id = self.initial_data.get('category')
@@ -70,8 +129,30 @@ class AdminQuestionSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
+        image_path = validated_data.pop('image_path', '')
+        solution_image_path = validated_data.pop('solution_image_path', '')
         validated_data['created_by'] = self.context['request'].user
-        return super().create(validated_data)
+        instance = super().create(validated_data)
+        self._apply_stored_paths(instance, image_path, solution_image_path)
+        return instance
+
+    def update(self, instance, validated_data):
+        image_path = validated_data.pop('image_path', None)
+        solution_image_path = validated_data.pop('solution_image_path', None)
+        instance = super().update(instance, validated_data)
+        self._apply_stored_paths(instance, image_path, solution_image_path)
+        return instance
+
+    def _apply_stored_paths(self, instance, image_path, solution_image_path):
+        changed = False
+        if image_path:
+            instance.image.name = image_path
+            changed = True
+        if solution_image_path:
+            instance.solution_image.name = solution_image_path
+            changed = True
+        if changed:
+            instance.save()
 
 
 class AdminQuestionViewSet(viewsets.ModelViewSet):
@@ -153,7 +234,7 @@ class ChapterAdminViewSet(viewsets.ModelViewSet):
 class ModuleAdminSerializer(serializers.ModelSerializer):
     class Meta:
         model = Module
-        fields = ['id', 'chapter', 'module_type', 'title', 'order', 'is_premium']
+        fields = ['id', 'chapter', 'module_type', 'title', 'order', 'is_premium', 'linked_paper']
 
 
 class ModuleAdminViewSet(viewsets.ModelViewSet):

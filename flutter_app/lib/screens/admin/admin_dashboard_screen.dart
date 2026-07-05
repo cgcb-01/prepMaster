@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../api/api_client.dart';
 import '../../widgets/async_section.dart';
-import './add_question_screen.dart';
-import './paper_builder_screen.dart';
+import 'add_questions_screen.dart';
+import 'paper_builder_screen.dart';
 
 /// Admin landing: quick counts + entry into the reference-style
 /// "Add Questions" flow and the paper builder.

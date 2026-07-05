@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -55,6 +56,33 @@ class ApiClient {
     final resp = await dio.post('/api/auth/register/', data: payload);
     await _storage.write(key: 'access_token', value: resp.data['access']);
     await _storage.write(key: 'refresh_token', value: resp.data['refresh']);
+  }
+
+  /// Uploads image bytes to the backend's real storage (Backblaze B2 in
+  /// production, local MEDIA in demo mode) and returns both:
+  ///   - 'path': the storage-relative name, used when attaching the image
+  ///     to a question (`image_path` / `solution_image_path` fields)
+  ///   - 'url': the actual servable URL, used for previewing it. On B2
+  ///     this is a full signed URL, NOT baseUrl+path, so callers must use
+  ///     this field directly rather than constructing their own.
+  /// This is the ONLY way an image should reach the server — never send a
+  /// device file path or a browser blob: URL, since neither means anything
+  /// outside the machine/tab that created it.
+  /// Storage backends return different URL shapes: local/demo storage gives
+  /// a relative path like "/media/admin_uploads/x.png" (needs the API host
+  /// prefixed for Image.network to work), while Backblaze B2 already
+  /// returns a full absolute URL. This normalizes either case.
+  static String resolveMediaUrl(String url) {
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    return '${ApiClient.baseUrl}$url';
+  }
+
+  static Future<Map<String, String>> uploadImage(Uint8List bytes, String filename) async {
+    final formData = FormData.fromMap({
+      'file': MultipartFile.fromBytes(bytes, filename: filename),
+    });
+    final resp = await dio.post('/api/admin/upload-image/', data: formData);
+    return {'path': resp.data['path'] as String, 'url': resp.data['url'] as String};
   }
 
   static Future<void> logout() async {

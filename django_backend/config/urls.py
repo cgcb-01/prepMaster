@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.conf import settings
 from django.urls import path, include
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from apps.users.views import RegisterView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -9,6 +10,7 @@ urlpatterns = [
     # Auth
     path('api/auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/auth/register/', RegisterView.as_view(), name='register'),
 
     # Feature apps
     path('api/users/', include('apps.users.urls')),

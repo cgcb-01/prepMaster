@@ -65,6 +65,11 @@ class Module(models.Model):
     title = models.CharField(max_length=150)
     order = models.PositiveIntegerField(default=0)
     is_premium = models.BooleanField(default=False)  # point #18: admin decides premium status
+    linked_paper = models.ForeignKey(
+        'exams.ExamPaper', null=True, blank=True, on_delete=models.SET_NULL,
+        help_text="The test/DPP/etc. that represents 'completing' this module. "
+                  "Used by the To-Do feature to detect when a linked task is done.",
+    )
 
     class Meta:
         ordering = ['order']

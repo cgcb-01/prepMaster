@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
@@ -40,7 +39,9 @@ class _AddQuestionsScreenState extends State<AddQuestionsScreen> {
   final _marksCorrectCtrl = TextEditingController(text: '4');
   final _marksIncorrectCtrl = TextEditingController(text: '-1');
   List<AdminQuestionOption> _options = [AdminQuestionOption(), AdminQuestionOption(), AdminQuestionOption(), AdminQuestionOption()];
-  final Map<String, File> _pendingImages = {}; // 'body' | 'opt0'..'opt3' | 'solution'
+  final Map<String, String> _uploadedImagePaths = {}; // key -> storage path, sent to backend when saving
+  final Map<String, String> _uploadedImageUrls = {}; // key -> servable URL, used only for preview
+  final Set<String> _uploadingKeys = {}; // shows a spinner while that slot's upload is in flight
   int? _editingQuestionId; // non-null while editing an existing question
   List<Map<String, dynamic>> _paperQuestions = [];
   bool _submitting = false;
@@ -118,7 +119,29 @@ class _AddQuestionsScreenState extends State<AddQuestionsScreen> {
   Future<void> _pickImage(String key) async {
     final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
     if (picked == null) return;
-    setState(() => _pendingImages[key] = File(picked.path));
+
+    // XFile.readAsBytes() works on every platform (web, mobile, desktop).
+    // We upload immediately so what gets attached to the question is a
+    // real, permanently-stored backend path — never a device file path or
+    // a browser blob: URL, neither of which mean anything once this tab
+    // or app session ends.
+    final bytes = await picked.readAsBytes();
+    setState(() => _uploadingKeys.add(key));
+    try {
+      final result = await ApiClient.uploadImage(bytes, picked.name);
+      if (key.startsWith('opt')) {
+        final index = int.parse(key.substring(3));
+        _options[index].imageUrl = result['path']!;
+      }
+      setState(() {
+        _uploadedImagePaths[key] = result['path']!;
+        _uploadedImageUrls[key] = result['url']!;
+      });
+    } catch (e) {
+      _setStatus('Image upload failed: $e', error: true);
+    } finally {
+      setState(() => _uploadingKeys.remove(key));
+    }
   }
 
   void _setStatus(String msg, {bool error = false}) {
@@ -140,7 +163,12 @@ class _AddQuestionsScreenState extends State<AddQuestionsScreen> {
         _solutionCtrl.text = q.solutionText;
         _numericalCtrl.text = q.numericalAnswer?.toString() ?? '';
         _options = q.options.isNotEmpty ? q.options : [AdminQuestionOption(), AdminQuestionOption(), AdminQuestionOption(), AdminQuestionOption()];
-        _pendingImages.clear();
+        _uploadedImagePaths.clear();
+        _uploadedImageUrls.clear();
+        // Show whatever's already stored server-side; these only get
+        // overwritten if the admin picks a new image in this session.
+        if (q.imageUrl != null) _uploadedImageUrls['body'] = q.imageUrl!;
+        if (q.solutionImageUrl != null) _uploadedImageUrls['solution'] = q.solutionImageUrl!;
       });
       _setStatus('Editing question #$questionId — save to update it in place.');
     } catch (e) {
@@ -156,7 +184,8 @@ class _AddQuestionsScreenState extends State<AddQuestionsScreen> {
       _solutionCtrl.clear();
       _numericalCtrl.clear();
       _options = [AdminQuestionOption(), AdminQuestionOption(), AdminQuestionOption(), AdminQuestionOption()];
-      _pendingImages.clear();
+      _uploadedImagePaths.clear();
+      _uploadedImageUrls.clear();
     });
   }
 
@@ -174,6 +203,10 @@ class _AddQuestionsScreenState extends State<AddQuestionsScreen> {
         'options': _isNumerical ? [] : _options.map((o) => o.toJson()).toList(),
         'numerical_answer': _isNumerical ? double.tryParse(_numericalCtrl.text) : null,
         'solution_text': _solutionCtrl.text.trim(),
+        // Only sent when a NEW image was picked+uploaded this session —
+        // omitting the key leaves an existing image untouched on edit.
+        if (_uploadedImagePaths['body'] != null) 'image_path': _uploadedImagePaths['body'],
+        if (_uploadedImagePaths['solution'] != null) 'solution_image_path': _uploadedImagePaths['solution'],
       };
 
       Map<String, dynamic> savedQuestion;
@@ -380,7 +413,8 @@ class _AddQuestionsScreenState extends State<AddQuestionsScreen> {
   }
 
   Widget _richField({required String label, TextEditingController? controller, String? initialValue, required String imageKey, int maxLines = 2, bool compact = false, ValueChanged<String>? onChanged}) {
-    final img = _pendingImages[imageKey];
+    final previewUrl = _uploadedImageUrls[imageKey];
+    final isUploading = _uploadingKeys.contains(imageKey);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -391,8 +425,18 @@ class _AddQuestionsScreenState extends State<AddQuestionsScreen> {
         ),
         const SizedBox(width: 6),
         Column(children: [
-          IconButton(icon: const Icon(Icons.image_outlined, size: 20), onPressed: () => _pickImage(imageKey), tooltip: 'Attach image'),
-          if (img != null) SizedBox(width: 32, height: 24, child: Image.file(img, fit: BoxFit.cover)),
+          IconButton(
+            icon: isUploading
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.image_outlined, size: 20),
+            onPressed: isUploading ? null : () => _pickImage(imageKey),
+            tooltip: 'Attach image (uploads to server immediately)',
+          ),
+          // Rendered from the URL the upload endpoint actually returned —
+          // never a local file path or blob: URL — so this preview only
+          // ever shows what's genuinely stored server-side.
+          if (previewUrl != null)
+            SizedBox(width: 32, height: 24, child: Image.network(previewUrl, fit: BoxFit.cover)),
         ]),
       ],
     );

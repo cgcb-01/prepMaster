@@ -78,6 +78,11 @@ def score_attempt(attempt_id: int):
     attempt.accuracy_percent = (correct / attempted * 100) if attempted else 0.0
     attempt.save(update_fields=['total_score', 'accuracy_percent'])
 
+    # If this attempt completes a module-linked to-do, mark it done and
+    # apply a performance-weighted rating bump (point #15).
+    from apps.todo.services import check_and_complete_module_todos
+    check_and_complete_module_todos(attempt)
+
     # If this paper is a live contest, push the leaderboard update.
     if attempt.paper.paper_type in ('PAIC', 'BAIC'):
         _update_leaderboard(attempt)

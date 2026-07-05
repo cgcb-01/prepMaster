@@ -87,6 +87,7 @@ class Command(BaseCommand):
         ]:
             Module.objects.get_or_create(chapter=self.chapter_kinematics, module_type=module_type,
                                           defaults={'title': title, 'order': order})
+        self.dpp_module = Module.objects.get(chapter=self.chapter_kinematics, module_type='DPP')
 
         # Marking-scheme categories (point #22)
         self.cat_mcq_single_neet, _ = QuestionCategory.objects.get_or_create(
@@ -168,6 +169,8 @@ class Command(BaseCommand):
             title='DPP — 20 May 2024 (NEET)', paper_type='DPP', exam_style='NEET', class_level='12',
             defaults={'duration_minutes': 30, 'total_marks': 16, 'is_premium': False, 'created_by': self.admin},
         )
+        self.dpp_module.linked_paper = self.dpp_paper
+        self.dpp_module.save(update_fields=['linked_paper'])
         self.paic_paper, _ = ExamPaper.objects.get_or_create(
             title='PAIC #14', paper_type='PAIC', exam_style='JEE_MAIN', class_level='12',
             defaults={
@@ -210,4 +213,13 @@ class Command(BaseCommand):
             defaults={'due_date': timezone.now().date() - timedelta(days=1), 'is_completed': True,
                       'completed_at': timezone.now()},
         )
+        # Module-linked example (point #15): completing this DPP module
+        # will auto-complete this to-do via apps.todo.services.
+        from apps.content.models import Module
+        dpp_module = Module.objects.filter(module_type='DPP', chapter=self.chapter_kinematics).first()
+        if dpp_module:
+            TodoItem.objects.get_or_create(
+                user=self.student, module=dpp_module,
+                defaults={'due_date': timezone.now().date() + timedelta(days=3)},
+            )
         self.stdout.write('  rating history + 2 todo items for arjun_sharma')

@@ -69,3 +69,23 @@ class FriendsListView(generics.ListAPIView):
         ids = list(Friendship.objects.filter(from_user=u, status='ACCEPTED').values_list('to_user_id', flat=True))
         ids += list(Friendship.objects.filter(to_user=u, status='ACCEPTED').values_list('from_user_id', flat=True))
         return User.objects.filter(id__in=ids)
+
+
+class RegisterView(views.APIView):
+    """POST /api/auth/register/ — creates the account and returns JWT
+    tokens immediately (auto-login), same shape as /api/auth/token/."""
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        from rest_framework_simplejwt.tokens import RefreshToken
+        from .serializers import RegisterSerializer
+
+        serializer = RegisterSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            'access': str(refresh.access_token),
+            'refresh': str(refresh),
+        }, status=status.HTTP_201_CREATED)

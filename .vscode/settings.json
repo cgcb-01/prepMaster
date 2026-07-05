@@ -6,5 +6,6 @@
         "DJANGO_SETTINGS_MODULE": "config.settings_demo",
         "WEASYPRINT_DLL_DIRECTORIES": "C:\\msys64\\ucrt64\\bin",
         "PATH": "${env:PATH};C:\\msys64\\ucrt64\\bin"
-    }
+    },
+    "cmake.sourceDirectory": "C:/Users/Lenovo/Desktop/All in one/app/prepmaster/flutter_app/linux"
 }

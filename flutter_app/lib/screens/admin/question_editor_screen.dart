@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
@@ -10,9 +9,11 @@ import '../../models/admin_models.dart';
 ///
 /// Every question supports mixed plain text + LaTeX (wrapped in $...$) in
 /// the body AND in each option's text, plus an optional image on the body,
-/// each option, and the solution — all simultaneously, per spec. A live
-/// preview renders the LaTeX as the admin types. Any existing question can
-/// be reopened here and edited at any time (point #19): pass an existing
+/// each option, and the solution — all simultaneously, per spec. Images are
+/// uploaded to the backend the moment they're picked; only the resulting
+/// permanent storage path is ever saved with the question — never a local
+/// device path or a browser blob: URL. Any existing question can be
+/// reopened here and edited at any time (point #19): pass an existing
 /// `questionId` to load it, or omit it to create a new one.
 class QuestionEditorScreen extends StatefulWidget {
   final int? questionId;
@@ -31,8 +32,14 @@ class _QuestionEditorScreenState extends State<QuestionEditorScreen> {
 
   AdminQuestion _question = AdminQuestion();
   List<AdminCategory> _categories = [];
-  File? _bodyImageFile;
-  File? _solutionImageFile;
+
+  // Real backend-stored paths (sent to the server) and their servable
+  // preview URLs, keyed the same way as add_questions_screen.dart:
+  // 'body', 'solution', 'opt0'..'optN'.
+  final Map<String, String> _uploadedPaths = {};
+  final Map<String, String> _uploadedUrls = {};
+  final Set<String> _uploadingKeys = {};
+
   bool _loading = true;
   bool _saving = false;
 
@@ -56,6 +63,8 @@ class _QuestionEditorScreenState extends State<QuestionEditorScreen> {
         _numericalController.text = _question.numericalAnswer?.toString() ?? '';
         _yearController.text = _question.year?.toString() ?? '';
         _shiftController.text = _question.examShift;
+        if (_question.imageUrl != null) _uploadedUrls['body'] = _question.imageUrl!;
+        if (_question.solutionImageUrl != null) _uploadedUrls['solution'] = _question.solutionImageUrl!;
       }
     } catch (_) {
       // Categories/question failed to load — form still usable once retried.
@@ -64,25 +73,24 @@ class _QuestionEditorScreenState extends State<QuestionEditorScreen> {
     }
   }
 
-  Future<void> _pickImage({required bool forSolution}) async {
+  Future<void> _pickImage(String key, {int? optionIndex}) async {
     final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
     if (picked == null) return;
-    setState(() {
-      if (forSolution) {
-        _solutionImageFile = File(picked.path);
-      } else {
-        _bodyImageFile = File(picked.path);
-      }
-    });
-  }
 
-  Future<void> _pickOptionImage(int index) async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85);
-    if (picked == null) return;
-    // In production: upload immediately to get a URL, or send as part of a
-    // multipart request alongside the JSON payload on save. Kept as a local
-    // path placeholder here to keep the form responsive while typing.
-    setState(() => _question.options[index].imageUrl = picked.path);
+    final bytes = await picked.readAsBytes();
+    setState(() => _uploadingKeys.add(key));
+    try {
+      final result = await ApiClient.uploadImage(bytes, picked.name);
+      setState(() {
+        _uploadedPaths[key] = result['path']!;
+        _uploadedUrls[key] = result['url']!;
+        if (optionIndex != null) _question.options[optionIndex].imageUrl = result['path']!;
+      });
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Image upload failed: $e')));
+    } finally {
+      setState(() => _uploadingKeys.remove(key));
+    }
   }
 
   Future<void> _save() async {
@@ -94,17 +102,20 @@ class _QuestionEditorScreenState extends State<QuestionEditorScreen> {
     _question.examShift = _shiftController.text;
 
     try {
-      final formData = FormMap(_question.toJson());
+      final payload = _question.toJson();
+      // Only sent when a NEW image was picked+uploaded this session —
+      // omitting the key leaves an existing image untouched on edit.
+      if (_uploadedPaths['body'] != null) payload['image_path'] = _uploadedPaths['body'];
+      if (_uploadedPaths['solution'] != null) payload['solution_image_path'] = _uploadedPaths['solution'];
+
       if (widget.questionId != null) {
-        await ApiClient.dio.patch('/api/admin/questions/${widget.questionId}/', data: formData.asMap());
+        await ApiClient.dio.patch('/api/admin/questions/${widget.questionId}/', data: payload);
       } else {
-        await ApiClient.dio.post('/api/admin/questions/', data: formData.asMap());
+        await ApiClient.dio.post('/api/admin/questions/', data: payload);
       }
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Save failed: $e')));
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Save failed: $e')));
     } finally {
       setState(() => _saving = false);
     }
@@ -145,6 +156,25 @@ class _QuestionEditorScreenState extends State<QuestionEditorScreen> {
     );
   }
 
+  Widget _imageAttachButton(String key, {int? optionIndex, String label = 'Attach image'}) {
+    final isUploading = _uploadingKeys.contains(key);
+    final url = _uploadedUrls[key];
+    return Row(children: [
+      OutlinedButton.icon(
+        onPressed: isUploading ? null : () => _pickImage(key, optionIndex: optionIndex),
+        icon: isUploading
+            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+            : const Icon(Icons.image_outlined, size: 16),
+        label: Text(label),
+      ),
+      const SizedBox(width: 10),
+      // Rendered from the URL the backend actually returned — never a
+      // local file path or blob: URL — so this only shows what's really
+      // stored server-side.
+      if (url != null) SizedBox(height: 40, child: Image.network(url)),
+    ]);
+  }
+
   Widget _buildForm() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -174,16 +204,7 @@ class _QuestionEditorScreenState extends State<QuestionEditorScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          Row(children: [
-            OutlinedButton.icon(
-              onPressed: () => _pickImage(forSolution: false),
-              icon: const Icon(Icons.image_outlined, size: 16),
-              label: const Text('Attach image to question'),
-            ),
-            const SizedBox(width: 10),
-            if (_bodyImageFile != null)
-              SizedBox(height: 40, child: Image.file(_bodyImageFile!)),
-          ]),
+          _imageAttachButton('body', label: 'Attach image to question'),
           const SizedBox(height: 20),
 
           if (_isNumerical) ...[
@@ -215,6 +236,7 @@ class _QuestionEditorScreenState extends State<QuestionEditorScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           TextFormField(
                             initialValue: opt.text,
@@ -222,20 +244,7 @@ class _QuestionEditorScreenState extends State<QuestionEditorScreen> {
                             decoration: const InputDecoration(hintText: 'Option text (supports \$LaTeX\$)', isDense: true),
                           ),
                           const SizedBox(height: 6),
-                          Row(
-                            children: [
-                              TextButton.icon(
-                                onPressed: () => _pickOptionImage(i),
-                                icon: const Icon(Icons.image_outlined, size: 14),
-                                label: const Text('Add image', style: TextStyle(fontSize: 11)),
-                              ),
-                              if (opt.imageUrl.isNotEmpty)
-                                const Padding(
-                                  padding: EdgeInsets.only(left: 6),
-                                  child: Icon(Icons.check_circle, size: 14, color: AppColors.answered),
-                                ),
-                            ],
-                          ),
+                          _imageAttachButton('opt$i', optionIndex: i, label: 'Add image'),
                         ],
                       ),
                     ),
@@ -259,11 +268,7 @@ class _QuestionEditorScreenState extends State<QuestionEditorScreen> {
             decoration: const InputDecoration(hintText: 'Worked solution (text + \$LaTeX\$)', border: OutlineInputBorder()),
           ),
           const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: () => _pickImage(forSolution: true),
-            icon: const Icon(Icons.image_outlined, size: 16),
-            label: const Text('Attach image to solution'),
-          ),
+          _imageAttachButton('solution', label: 'Attach image to solution'),
           const SizedBox(height: 20),
 
           Row(children: [
@@ -299,7 +304,8 @@ class _QuestionEditorScreenState extends State<QuestionEditorScreen> {
             const Text('Live Preview', style: TextStyle(fontWeight: FontWeight.w700, color: Colors.black)),
             const Divider(color: Colors.black26),
             _renderMixed(_bodyController.text, fontSize: 15),
-            if (_bodyImageFile != null) Padding(padding: const EdgeInsets.only(top: 8), child: Image.file(_bodyImageFile!, height: 120)),
+            if (_uploadedUrls['body'] != null)
+              Padding(padding: const EdgeInsets.only(top: 8), child: Image.network(_uploadedUrls['body']!, height: 120)),
             const SizedBox(height: 16),
             if (!_isNumerical)
               ..._question.options.asMap().entries.map((e) {
@@ -342,14 +348,6 @@ class _QuestionEditorScreenState extends State<QuestionEditorScreen> {
       }).toList(),
     );
   }
-}
-
-/// Tiny helper so `_question.toJson()` (which contains a nested `options`
-/// list) can be sent as a JSON body via Dio without extra boilerplate.
-class FormMap {
-  final Map<String, dynamic> _data;
-  FormMap(this._data);
-  Map<String, dynamic> asMap() => _data;
 }
 
 extension _FirstOrNull<T> on Iterable<T> {
